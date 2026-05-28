@@ -17,7 +17,8 @@ import re
 LONGEST_KEY = 12
 FREQUENCY_PATH = None
 JYUTPING_RE = re.compile(r"([a-z]+)([1-6])")
-CANDIDATE_STROKE = "^"
+CANDIDATE_STROKE = "-^"
+CANDIDATE_STROKES = (CANDIDATE_STROKE, "^")
 MAX_PARTIAL_SYLLABLES = 4
 
 LEFT_INITIALS = {
@@ -266,7 +267,7 @@ def stroke_for_jyutping_syllable(syllable):
 def _candidate_request(outline):
     outline = tuple(outline)
     candidate_count = 0
-    while outline and outline[-1] == CANDIDATE_STROKE:
+    while outline and outline[-1] in CANDIDATE_STROKES:
         candidate_count += 1
         outline = outline[:-1]
     return outline, candidate_count

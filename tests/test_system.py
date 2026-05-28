@@ -14,7 +14,7 @@ class FaaiduckSystemTest(unittest.TestCase):
     def test_package_is_not_zip_safe(self):
         config = configparser.ConfigParser()
         config.read("setup.cfg")
-        self.assertEqual(config["metadata"]["version"], "0.1.6")
+        self.assertEqual(config["metadata"]["version"], "0.1.7")
         self.assertEqual(config["options"]["zip_safe"], "False")
 
     def test_requested_gemini_key_examples(self):
@@ -40,7 +40,8 @@ class FaaiduckSystemTest(unittest.TestCase):
         self.assertEqual(commands["#-G"], "{&。}")
         self.assertEqual(commands["#-W"], "{&，}")
         self.assertEqual(commands["#-WH"], "{&？}")
-        self.assertNotIn(faai.CANDIDATE_STROKE, commands)
+        for stroke in faai.CANDIDATE_STROKES:
+            self.assertNotIn(stroke, commands)
 
 
 if __name__ == "__main__":

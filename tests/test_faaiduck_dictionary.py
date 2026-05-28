@@ -38,13 +38,17 @@ class FaaiduckDictionaryTest(unittest.TestCase):
 
     def test_candidate_selector_uses_next_frequency_candidate(self):
         self.assertEqual(faai.lookup(("SDWi-W^",)), "{&醫}")
-        self.assertEqual(faai.lookup(("SDWi-W^", "^")), "{&伊}")
-        self.assertEqual(faai.lookup(("SDWi-W^", "^", "^")), "{&𠵱}")
+        self.assertEqual(faai.lookup(("SDWi-W^", "-^")), "{&伊}")
+        self.assertEqual(faai.lookup(("SDWi-W^", "-^", "-^")), "{&𠵱}")
         self.assertEqual(
-            faai.lookup_candidates(("SDWi-W^", "^"))[:3],
+            faai.lookup_candidates(("SDWi-W^", "-^"))[:3],
             ("醫", "伊", "𠵱"),
         )
-        self.assertEqual(faai.lookup(("S-D", "^")), "{&受到}")
+        self.assertEqual(faai.lookup(("S-D", "-^")), "{&受到}")
+        self.assertEqual(faai.lookup(("S-G", "-^")), "{&世界}")
+
+    def test_legacy_candidate_selector_spelling_is_accepted(self):
+        self.assertEqual(faai.lookup(("SDWi-W^", "^")), "{&伊}")
 
     def test_multistroke_toneless_frequency_output(self):
         self.assertEqual(faai.lookup(("SDa", "Si")), "{&巴士}")
