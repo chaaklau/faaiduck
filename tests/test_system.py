@@ -1,4 +1,5 @@
 import unittest
+import json
 
 from Faaiduck import system
 
@@ -14,12 +15,23 @@ class FaaiduckSystemTest(unittest.TestCase):
         self.assertEqual(gemini["-w"], "#4")
         self.assertEqual(gemini["S-"], ("S1-", "S2-"))
         self.assertEqual(gemini["D-"], "T-")
+        self.assertEqual(gemini["-j"], "-U")
+        self.assertEqual(gemini["-g"], "-E")
 
     def test_keymap_covers_all_system_keys(self):
         for machine, keymap in system.KEYMAPS.items():
             with self.subTest(machine=machine):
                 missing = [key for key in system.KEYS if key not in keymap]
                 self.assertEqual(missing, [])
+
+    def test_default_commands_include_spacing_and_punctuation(self):
+        with open("Faaiduck/dictionaries/default/commands.json", encoding="utf-8") as f:
+            commands = json.load(f)
+        self.assertEqual(commands["#-S"], "{^ ^}")
+        self.assertEqual(commands["#-D"], "{#Return}")
+        self.assertEqual(commands["#-G"], "{&。}")
+        self.assertEqual(commands["#-W"], "{&，}")
+        self.assertEqual(commands["#-WH"], "{&？}")
 
 
 if __name__ == "__main__":
