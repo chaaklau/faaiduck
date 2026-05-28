@@ -1,8 +1,8 @@
 """Dictionary functions for the Faaiduck theory tables.
 
 Known entries are loaded lazily from ``frequency.csv`` and ranked by frequency.
-If an outline is phonetic but not in the frequency table, lookup falls back to a
-Jyutping-flavoured debug output so keymap testing stays easy.
+Plover-facing lookup returns Chinese text only; helper functions expose the
+phonetic Jyutping decoding for tests and future tools.
 """
 
 from collections import defaultdict
@@ -130,11 +130,7 @@ def lookup(outline):
     honzi = lookup_honzi(outline)
     if honzi is not None:
         return _glue(honzi)
-
-    pieces = [_lookup_stroke(stroke) for stroke in outline]
-    if any(piece is None for piece in pieces):
-        raise KeyError
-    return _glue("".join(pieces))
+    raise KeyError
 
 
 def reverse_lookup(text):
@@ -171,7 +167,13 @@ def lookup_honzi(outline, candidate=0):
 
 
 def lookup_candidates(outline):
-    return _frequency_index().get(tuple(outline), ())
+    exact_candidates = _frequency_index().get(tuple(outline), ())
+    if exact_candidates:
+        return exact_candidates
+    toneless = toneless_jyutping_from_outline(outline)
+    if toneless:
+        return _toneless_frequency_index().get(toneless, ())
+    return ()
 
 
 def reverse_lookup_honzi(text):
@@ -183,6 +185,17 @@ def parse_jyutping(jyutping):
     if "".join(syllable + tone for syllable, tone in syllables) != jyutping:
         return ()
     return tuple(syllables)
+
+
+def jyutping_from_outline(outline):
+    pieces = [_lookup_stroke(stroke) for stroke in outline]
+    if any(piece is None for piece in pieces):
+        return ""
+    return "".join(piece.replace("-", "") for piece in pieces)
+
+
+def toneless_jyutping_from_outline(outline):
+    return _strip_tones(jyutping_from_outline(outline))
 
 
 def outline_from_jyutping(jyutping, mode="canonical"):
@@ -307,6 +320,16 @@ def _reverse_tone(tone):
 
 
 @lru_cache(maxsize=1)
+def _toneless_frequency_index():
+    index = defaultdict(list)
+    for row_number, row in enumerate(_load_frequency_rows()):
+        toneless = _strip_tones(row["jyutping"])
+        if toneless:
+            index[toneless].append((row["frequency"], row_number, row["honzi"]))
+    return _rank_index(index)
+
+
+@lru_cache(maxsize=1)
 def _frequency_index():
     index = defaultdict(list)
     for row_number, row in enumerate(_load_frequency_rows()):
@@ -314,7 +337,10 @@ def _frequency_index():
         for outline in outlines:
             if outline and all(outline):
                 index[outline].append((row["frequency"], row_number, row["honzi"]))
+    return _rank_index(index)
 
+
+def _rank_index(index):
     ranked = {}
     for outline, entries in index.items():
         entries.sort(key=lambda entry: (-entry[0], entry[1]))
@@ -368,6 +394,13 @@ def _frequency(value):
         return int(value)
     except ValueError:
         return 0
+
+
+def _strip_tones(jyutping):
+    syllables = parse_jyutping(jyutping)
+    if syllables:
+        return "".join(syllable for syllable, _ in syllables)
+    return jyutping if jyutping.isalpha() else ""
 
 
 def _glue(text):

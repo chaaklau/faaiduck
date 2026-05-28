@@ -4,8 +4,14 @@ from Faaiduck.dictionaries.default import faai
 
 
 class FaaiduckDictionaryTest(unittest.TestCase):
-    def test_single_syllable(self):
-        self.assertEqual(faai.lookup(("SDa",)), "{&baa}")
+    def test_single_syllable_uses_toneless_frequency_lookup(self):
+        self.assertEqual(faai.lookup(("SDa",)), "{&霸}")
+        self.assertEqual(faai.lookup_candidates(("SDa",))[:4], (
+            "霸",
+            "芭",
+            "壩",
+            "葩",
+        ))
 
     def test_single_syllable_with_tone(self):
         self.assertEqual(faai.lookup(("SDa-W^",)), "{&芭}")
@@ -20,19 +26,22 @@ class FaaiduckDictionaryTest(unittest.TestCase):
             "把屎",
         ))
 
-    def test_multistroke_debug_output_has_no_slash(self):
-        self.assertEqual(faai.lookup(("SDa", "Si")), "{&baasi}")
+    def test_multistroke_toneless_frequency_output(self):
+        self.assertEqual(faai.lookup(("SDa", "Si")), "{&巴士}")
+        self.assertEqual(faai.jyutping_from_outline(("SDa", "Si")), "baasi")
 
     def test_workbook_initial_examples(self):
-        self.assertEqual(faai.lookup(("SDHa",)), "{&paa}")
-        self.assertEqual(faai.lookup(("GWa",)), "{&gwaa}")
-        self.assertEqual(faai.lookup(("GWHa",)), "{&kwaa}")
-        self.assertEqual(faai.lookup(("SDGg",)), "{&ng}")
+        self.assertEqual(faai.lookup(("SDHa",)), "{&趴}")
+        self.assertEqual(faai.lookup(("GWa",)), "{&瓜}")
+        self.assertEqual(faai.lookup(("GWHa",)), "{&誇}")
+        self.assertEqual(faai.lookup(("SDGg",)), "{&五}")
 
     def test_workbook_final_examples(self):
-        self.assertEqual(faai.lookup(("Sajg",)), "{&saan}")
-        self.assertEqual(faai.lookup(("Siuj",)), "{&seoi}")
-        self.assertEqual(faai.lookup(("Suw",)), "{&su}")
+        self.assertEqual(faai.lookup(("Sajg",)), "{&山}")
+        self.assertEqual(faai.lookup(("Siuj",)), "{&水}")
+        self.assertEqual(faai.jyutping_from_outline(("Suw",)), "su")
+        with self.assertRaises(KeyError):
+            faai.lookup(("Suw",))
 
     def test_frequency_table_lookup(self):
         self.assertEqual(faai.outline_from_jyutping("sat6ci4"), ("Swj-SHi",))
