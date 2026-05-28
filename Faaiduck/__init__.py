@@ -1,0 +1,1 @@
+"""Faaiduck Plover system plugin."""
