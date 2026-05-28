@@ -8,6 +8,7 @@ phonetic Jyutping decoding for tests and future tools.
 from collections import defaultdict
 import csv
 from functools import lru_cache
+import importlib.util
 import inspect
 from pathlib import Path
 import re
@@ -406,23 +407,64 @@ def _frequency_path():
 
 
 def _dictionary_path():
-    filename = globals().get("__file__")
-    if filename:
-        return Path(filename).resolve()
+    candidates = []
+
+    _add_path_candidate(candidates, globals().get("__file__"))
 
     spec = globals().get("__spec__")
-    origin = getattr(spec, "origin", None)
-    if origin and not str(origin).startswith("<"):
-        return Path(origin).resolve()
+    _add_path_candidate(candidates, getattr(spec, "origin", None))
 
     frame = inspect.currentframe()
     while frame is not None:
-        code_filename = frame.f_code.co_filename
-        if code_filename and not code_filename.startswith("<"):
-            return Path(code_filename).resolve()
+        for local_name in ("filename", "resource", "path"):
+            _add_path_candidate(candidates, frame.f_locals.get(local_name))
+
+        dictionary = frame.f_locals.get("self")
+        for attr_name in ("path", "filename", "_filename"):
+            _add_path_candidate(candidates, getattr(dictionary, attr_name, None))
+
+        _add_path_candidate(candidates, frame.f_code.co_filename)
         frame = frame.f_back
 
-    raise RuntimeError("could not locate faai.py to load frequency.csv")
+    package_spec = importlib.util.find_spec("Faaiduck.dictionaries.default")
+    package_paths = getattr(package_spec, "submodule_search_locations", None)
+    if package_paths:
+        for package_path in package_paths:
+            _add_path_candidate(candidates, Path(package_path) / "faai.py")
+
+    for candidate in candidates:
+        if _has_frequency_sibling(candidate):
+            return candidate
+
+    raise RuntimeError(
+        "could not locate faai.py to load frequency.csv; tried "
+        + ", ".join(str(candidate) for candidate in candidates)
+    )
+
+
+def _add_path_candidate(candidates, value):
+    if not value:
+        return
+    if not isinstance(value, (str, Path)):
+        return
+    value = str(value)
+    if value.startswith("<"):
+        return
+    if value.startswith("asset:"):
+        try:
+            from plover.resource import resource_filename
+        except Exception:
+            return
+        value = resource_filename(value)
+    path = Path(value).expanduser().resolve()
+    if path.is_dir():
+        path = path / "faai.py"
+    if path not in candidates:
+        candidates.append(path)
+
+
+def _has_frequency_sibling(path):
+    return path.name == "faai.py" and path.with_name("frequency.csv").exists()
 
 
 def _strip_tones(jyutping):

@@ -65,6 +65,20 @@ class FaaiduckDictionaryTest(unittest.TestCase):
         self.assertNotIn("__file__", namespace)
         self.assertEqual(namespace["lookup"](("SDa", "Si")), "{&巴士}")
 
+    def test_loader_stack_with_dictionary_self_path(self):
+        path = Path("Faaiduck/dictionaries/default/faai.py").resolve()
+        namespace = {"__name__": "faai_stack_self_path"}
+        exec(compile(path.read_text(encoding="utf-8"), "<string>", "exec"), namespace)
+
+        class Dictionary:
+            def __init__(self, dictionary_path):
+                self.path = str(dictionary_path)
+
+            def get(self, key):
+                return namespace["lookup"](key)
+
+        self.assertEqual(Dictionary(path).get(("SDa", "Si")), "{&巴士}")
+
 
 if __name__ == "__main__":
     unittest.main()
