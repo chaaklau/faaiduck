@@ -27,6 +27,25 @@ class FaaiduckDictionaryTest(unittest.TestCase):
             "把屎",
         ))
 
+    def test_incomplete_outlines_use_frequency_lookup(self):
+        self.assertEqual(faai.partial_key_from_outline(("S-D",)), (
+            ("initial", "s"),
+            ("initial", "d"),
+        ))
+        self.assertEqual(faai.lookup(("S-D",)), "{&收到}")
+        self.assertEqual(faai.lookup(("SDa-S",)), "{&巴士}")
+        self.assertEqual(faai.lookup(("SDa", "S")), "{&巴士}")
+
+    def test_candidate_selector_uses_next_frequency_candidate(self):
+        self.assertEqual(faai.lookup(("SDWi-W^",)), "{&醫}")
+        self.assertEqual(faai.lookup(("SDWi-W^", "^")), "{&伊}")
+        self.assertEqual(faai.lookup(("SDWi-W^", "^", "^")), "{&𠵱}")
+        self.assertEqual(
+            faai.lookup_candidates(("SDWi-W^", "^"))[:3],
+            ("醫", "伊", "𠵱"),
+        )
+        self.assertEqual(faai.lookup(("S-D", "^")), "{&受到}")
+
     def test_multistroke_toneless_frequency_output(self):
         self.assertEqual(faai.lookup(("SDa", "Si")), "{&巴士}")
         self.assertEqual(faai.jyutping_from_outline(("SDa", "Si")), "baasi")

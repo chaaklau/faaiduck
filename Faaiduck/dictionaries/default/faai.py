@@ -17,6 +17,8 @@ import re
 LONGEST_KEY = 12
 FREQUENCY_PATH = None
 JYUTPING_RE = re.compile(r"([a-z]+)([1-6])")
+CANDIDATE_STROKE = "^"
+MAX_PARTIAL_SYLLABLES = 4
 
 LEFT_INITIALS = {
     "": "",
@@ -162,16 +164,24 @@ def reverse_lookup(text):
 
 
 def lookup_honzi(outline, candidate=0):
-    candidates = lookup_candidates(outline)
-    if candidate < len(candidates):
-        return candidates[candidate]
+    base_outline, candidate_offset = _candidate_request(outline)
+    candidates = lookup_candidates(base_outline)
+    candidate_index = candidate + candidate_offset
+    if candidate_index < len(candidates):
+        return candidates[candidate_index]
     return None
 
 
 def lookup_candidates(outline):
+    outline, _ = _candidate_request(outline)
     exact_candidates = _frequency_index().get(tuple(outline), ())
     if exact_candidates:
         return exact_candidates
+    partial = partial_key_from_outline(outline)
+    if partial and _is_incomplete_partial_key(partial):
+        partial_candidates = _partial_frequency_index().get(partial, ())
+        if partial_candidates:
+            return partial_candidates
     toneless = toneless_jyutping_from_outline(outline)
     if toneless:
         return _toneless_frequency_index().get(toneless, ())
@@ -187,6 +197,20 @@ def parse_jyutping(jyutping):
     if "".join(syllable + tone for syllable, tone in syllables) != jyutping:
         return ()
     return tuple(syllables)
+
+
+def partial_key_from_outline(outline):
+    selectors = []
+    multi_stroke = len(outline) > 1
+    for stroke in outline:
+        parsed = _partial_selectors_from_stroke(
+            stroke,
+            force_initial_for_bare=multi_stroke,
+        )
+        if not parsed:
+            return ()
+        selectors.extend(parsed)
+    return tuple(selectors)
 
 
 def jyutping_from_outline(outline):
@@ -239,6 +263,15 @@ def stroke_for_jyutping_syllable(syllable):
     return ""
 
 
+def _candidate_request(outline):
+    outline = tuple(outline)
+    candidate_count = 0
+    while outline and outline[-1] == CANDIDATE_STROKE:
+        candidate_count += 1
+        outline = outline[:-1]
+    return outline, candidate_count
+
+
 def _lookup_stroke(stroke):
     left, right = _split_stroke(stroke)
     if right in TONES:
@@ -257,6 +290,50 @@ def _lookup_stroke(stroke):
     if right_syllable and not left:
         return right_syllable
     return None
+
+
+def _partial_selectors_from_stroke(stroke, force_initial_for_bare=False):
+    left, right = _split_stroke(stroke)
+    if right in TONES:
+        syllable = _decode_syllable(left)
+        if syllable:
+            return (("tone", syllable + TONES[right]),)
+        return ()
+
+    if left and right:
+        left_selector = _selector_from_side(left, paired=True)
+        right_selector = _selector_from_side(right, paired=True)
+        if left_selector and right_selector:
+            return (left_selector, right_selector)
+        return ()
+
+    side = left or right
+    selector = _selector_from_side(side, paired=force_initial_for_bare)
+    return (selector,) if selector else ()
+
+
+def _selector_from_side(keys, paired=False):
+    if not keys:
+        return ()
+    if keys in SPECIAL_STROKE_TO_SYLLABLE:
+        return ("syllable", SPECIAL_STROKE_TO_SYLLABLE[keys])
+
+    for initial_stroke, initial in sorted(
+        LEFT_INITIALS.items(), key=lambda item: len(item[0]), reverse=True
+    ):
+        if not initial or not keys.startswith(initial_stroke):
+            continue
+        final_stroke = keys[len(initial_stroke):]
+        if paired and not final_stroke:
+            return ("initial", initial)
+        final = FINALS.get(final_stroke)
+        if final is not None:
+            return ("syllable", initial + final)
+
+    final = FINALS.get(keys)
+    if final:
+        return ("syllable", final)
+    return ()
 
 
 def _stroke_pair(left_syllable, right_syllable):
@@ -322,6 +399,27 @@ def _reverse_tone(tone):
 
 
 @lru_cache(maxsize=1)
+def _partial_frequency_index():
+    index = defaultdict(list)
+    for row_number, row in enumerate(_load_frequency_rows()):
+        syllables = parse_jyutping(row["jyutping"])
+        if not syllables or len(syllables) > MAX_PARTIAL_SYLLABLES:
+            continue
+        selector_options = []
+        for syllable, tone in syllables:
+            initial = _initial_from_syllable(syllable)
+            options = [("syllable", syllable), ("tone", syllable + tone)]
+            if initial:
+                options.append(("initial", initial))
+            selector_options.append(tuple(options))
+        for selector_key in _selector_product(selector_options):
+            if not _is_incomplete_partial_key(selector_key):
+                continue
+            index[selector_key].append((row["frequency"], row_number, row["honzi"]))
+    return _rank_index(index)
+
+
+@lru_cache(maxsize=1)
 def _toneless_frequency_index():
     index = defaultdict(list)
     for row_number, row in enumerate(_load_frequency_rows()):
@@ -355,6 +453,26 @@ def _rank_index(index):
             seen.add(honzi)
         ranked[outline] = tuple(words)
     return ranked
+
+
+def _selector_product(options):
+    keys = [()]
+    for choices in options:
+        keys = [key + (choice,) for key in keys for choice in choices]
+    return keys
+
+
+def _is_incomplete_partial_key(partial):
+    return any(selector[0] == "initial" for selector in partial)
+
+
+def _initial_from_syllable(syllable):
+    if syllable in SPECIAL_SYLLABLE_TO_STROKE:
+        return syllable
+    for initial in SORTED_INITIALS:
+        if syllable.startswith(initial):
+            return initial
+    return ""
 
 
 @lru_cache(maxsize=1)
