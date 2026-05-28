@@ -8,12 +8,13 @@ phonetic Jyutping decoding for tests and future tools.
 from collections import defaultdict
 import csv
 from functools import lru_cache
+import inspect
 from pathlib import Path
 import re
 
 
 LONGEST_KEY = 12
-FREQUENCY_PATH = Path(__file__).with_name("frequency.csv")
+FREQUENCY_PATH = None
 JYUTPING_RE = re.compile(r"([a-z]+)([1-6])")
 
 LEFT_INITIALS = {
@@ -367,8 +368,9 @@ def _reverse_frequency_index():
 
 @lru_cache(maxsize=1)
 def _load_frequency_rows():
+    frequency_path = _frequency_path()
     rows = []
-    with FREQUENCY_PATH.open(newline="", encoding="utf-8-sig") as handle:
+    with frequency_path.open(newline="", encoding="utf-8-sig") as handle:
         for row in csv.DictReader(handle):
             rows.append({
                 "honzi": row["honzi"],
@@ -394,6 +396,33 @@ def _frequency(value):
         return int(value)
     except ValueError:
         return 0
+
+
+def _frequency_path():
+    global FREQUENCY_PATH
+    if FREQUENCY_PATH is None:
+        FREQUENCY_PATH = _dictionary_path().with_name("frequency.csv")
+    return FREQUENCY_PATH
+
+
+def _dictionary_path():
+    filename = globals().get("__file__")
+    if filename:
+        return Path(filename).resolve()
+
+    spec = globals().get("__spec__")
+    origin = getattr(spec, "origin", None)
+    if origin and not str(origin).startswith("<"):
+        return Path(origin).resolve()
+
+    frame = inspect.currentframe()
+    while frame is not None:
+        code_filename = frame.f_code.co_filename
+        if code_filename and not code_filename.startswith("<"):
+            return Path(code_filename).resolve()
+        frame = frame.f_back
+
+    raise RuntimeError("could not locate faai.py to load frequency.csv")
 
 
 def _strip_tones(jyutping):

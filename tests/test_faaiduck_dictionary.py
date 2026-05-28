@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from Faaiduck.dictionaries.default import faai
 
@@ -56,6 +57,13 @@ class FaaiduckDictionaryTest(unittest.TestCase):
         self.assertEqual(faai.reverse_lookup("baa"), [("SDa",)])
         self.assertEqual(faai.reverse_lookup("baa1"), [("SDa-W^",)])
         self.assertEqual(faai.reverse_lookup("巴士"), [("SDa-Si",)])
+
+    def test_loader_without_file_global(self):
+        path = Path("Faaiduck/dictionaries/default/faai.py").resolve()
+        namespace = {"__name__": "faai_without_file"}
+        exec(compile(path.read_text(encoding="utf-8"), str(path), "exec"), namespace)
+        self.assertNotIn("__file__", namespace)
+        self.assertEqual(namespace["lookup"](("SDa", "Si")), "{&巴士}")
 
 
 if __name__ == "__main__":
