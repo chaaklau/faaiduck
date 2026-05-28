@@ -1,4 +1,5 @@
 import unittest
+import configparser
 import json
 
 from Faaiduck import system
@@ -8,6 +9,12 @@ class FaaiduckSystemTest(unittest.TestCase):
     def test_plover_entry_point_target_exists(self):
         self.assertEqual(system.DICTIONARIES_ROOT, "asset:Faaiduck:dictionaries/default")
         self.assertIn("faai.py", system.DEFAULT_DICTIONARIES)
+
+    def test_package_is_not_zip_safe(self):
+        config = configparser.ConfigParser()
+        config.read("setup.cfg")
+        self.assertEqual(config["metadata"]["version"], "0.1.2")
+        self.assertEqual(config["options"]["zip_safe"], "False")
 
     def test_requested_gemini_key_examples(self):
         gemini = system.KEYMAPS["Gemini PR"]
