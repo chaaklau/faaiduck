@@ -64,8 +64,13 @@ class FaaiduckDictionaryTest(unittest.TestCase):
         self.assertEqual(faai.lookup(("Sajg",)), "{&山}")
         self.assertEqual(faai.lookup(("Siuj",)), "{&水}")
         self.assertEqual(faai.jyutping_from_outline(("Suw",)), "su")
+        self.assertEqual(faai.lookup(("Suw",)), "{&su}")
+
+    def test_valid_outlines_without_characters_fall_back_to_jyutping(self):
+        self.assertEqual(faai.jyutping_from_outline(("SDauwjg",)), "baap")
+        self.assertEqual(faai.lookup(("SDauwjg",)), "{&baap}")
         with self.assertRaises(KeyError):
-            faai.lookup(("Suw",))
+            faai.lookup(("SDauwjg", "-^"))
 
     def test_frequency_table_lookup(self):
         self.assertEqual(faai.outline_from_jyutping("sat6ci4"), ("Swj-SHi",))

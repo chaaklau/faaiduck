@@ -132,9 +132,15 @@ SORTED_INITIALS = sorted(INITIAL_TO_STROKE, key=len, reverse=True)
 
 def lookup(outline):
     assert len(outline) <= LONGEST_KEY
+    base_outline, candidate_offset = _candidate_request(outline)
     honzi = lookup_honzi(outline)
     if honzi is not None:
         return _glue(honzi)
+    if candidate_offset:
+        raise KeyError
+    jyutping = jyutping_from_outline(base_outline)
+    if jyutping:
+        return _glue(jyutping)
     raise KeyError
 
 
@@ -175,17 +181,33 @@ def lookup_honzi(outline, candidate=0):
 
 def lookup_candidates(outline):
     outline, _ = _candidate_request(outline)
+    partial = partial_key_from_outline(outline)
+    if partial and _is_incomplete_partial_key(partial):
+        partial_candidates = _partial_candidates(partial)
+        if partial_candidates:
+            return partial_candidates
+
+    jyutping = jyutping_from_outline(outline)
+    if jyutping:
+        has_explicit_tones = _outline_has_only_explicit_tones(outline)
+        if has_explicit_tones:
+            jyutping_candidates = _jyutping_frequency_index().get(jyutping, ())
+            if jyutping_candidates:
+                return jyutping_candidates
+        toneless = _strip_tones(jyutping)
+        if toneless and not _has_tone(jyutping):
+            return _toneless_frequency_index().get(toneless, ())
+        if has_explicit_tones:
+            return ()
+
     exact_candidates = _frequency_index().get(tuple(outline), ())
     if exact_candidates:
         return exact_candidates
-    partial = partial_key_from_outline(outline)
-    if partial and _is_incomplete_partial_key(partial):
-        partial_candidates = _partial_frequency_index().get(partial, ())
-        if partial_candidates:
-            return partial_candidates
-    toneless = toneless_jyutping_from_outline(outline)
-    if toneless:
-        return _toneless_frequency_index().get(toneless, ())
+
+    if jyutping:
+        toneless = _strip_tones(jyutping)
+        if toneless:
+            return _toneless_frequency_index().get(toneless, ())
     return ()
 
 
@@ -271,6 +293,16 @@ def _candidate_request(outline):
         candidate_count += 1
         outline = outline[:-1]
     return outline, candidate_count
+
+
+def _outline_has_only_explicit_tones(outline):
+    if not outline:
+        return False
+    for stroke in outline:
+        left, right = _split_stroke(stroke)
+        if right not in TONES or not _decode_syllable(left):
+            return False
+    return True
 
 
 def _lookup_stroke(stroke):
@@ -399,24 +431,26 @@ def _reverse_tone(tone):
     return ""
 
 
-@lru_cache(maxsize=1)
-def _partial_frequency_index():
-    index = defaultdict(list)
+@lru_cache(maxsize=256)
+def _partial_candidates(partial):
+    entries = []
     for row_number, row in enumerate(_load_frequency_rows()):
         syllables = parse_jyutping(row["jyutping"])
         if not syllables or len(syllables) > MAX_PARTIAL_SYLLABLES:
             continue
-        selector_options = []
-        for syllable, tone in syllables:
-            initial = _initial_from_syllable(syllable)
-            options = [("syllable", syllable), ("tone", syllable + tone)]
-            if initial:
-                options.append(("initial", initial))
-            selector_options.append(tuple(options))
-        for selector_key in _selector_product(selector_options):
-            if not _is_incomplete_partial_key(selector_key):
-                continue
-            index[selector_key].append((row["frequency"], row_number, row["honzi"]))
+        if _partial_matches_syllables(partial, syllables):
+            entries.append((row["frequency"], row_number, row["honzi"]))
+    return _rank_entries(entries)
+
+
+@lru_cache(maxsize=1)
+def _jyutping_frequency_index():
+    index = defaultdict(list)
+    for row_number, row in enumerate(_load_frequency_rows()):
+        if row["jyutping"]:
+            index[row["jyutping"]].append(
+                (row["frequency"], row_number, row["honzi"])
+            )
     return _rank_index(index)
 
 
@@ -444,27 +478,43 @@ def _frequency_index():
 def _rank_index(index):
     ranked = {}
     for outline, entries in index.items():
-        entries.sort(key=lambda entry: (-entry[0], entry[1]))
-        words = []
-        seen = set()
-        for _, _, honzi in entries:
-            if honzi in seen:
-                continue
-            words.append(honzi)
-            seen.add(honzi)
-        ranked[outline] = tuple(words)
+        ranked[outline] = _rank_entries(entries)
     return ranked
 
 
-def _selector_product(options):
-    keys = [()]
-    for choices in options:
-        keys = [key + (choice,) for key in keys for choice in choices]
-    return keys
+def _rank_entries(entries):
+    entries.sort(key=lambda entry: (-entry[0], entry[1]))
+    words = []
+    seen = set()
+    for _, _, honzi in entries:
+        if honzi in seen:
+            continue
+        words.append(honzi)
+        seen.add(honzi)
+    return tuple(words)
 
 
 def _is_incomplete_partial_key(partial):
     return any(selector[0] == "initial" for selector in partial)
+
+
+def _partial_matches_syllables(partial, syllables):
+    if len(partial) != len(syllables):
+        return False
+    for selector, (syllable, tone) in zip(partial, syllables):
+        selector_type, selector_value = selector
+        if selector_type == "initial":
+            if _initial_from_syllable(syllable) != selector_value:
+                return False
+        elif selector_type == "syllable":
+            if syllable != selector_value:
+                return False
+        elif selector_type == "tone":
+            if syllable + tone != selector_value:
+                return False
+        else:
+            return False
+    return True
 
 
 def _initial_from_syllable(syllable):
@@ -591,6 +641,10 @@ def _strip_tones(jyutping):
     if syllables:
         return "".join(syllable for syllable, _ in syllables)
     return jyutping if jyutping.isalpha() else ""
+
+
+def _has_tone(jyutping):
+    return any(character.isdigit() for character in jyutping)
 
 
 def _glue(text):
