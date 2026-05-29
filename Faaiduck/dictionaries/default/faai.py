@@ -138,7 +138,7 @@ def lookup(outline):
         return _glue(honzi)
     if candidate_offset:
         raise KeyError
-    jyutping = jyutping_from_outline(base_outline)
+    jyutping = lookup_jyutping(base_outline)
     if jyutping:
         return _glue(jyutping)
     raise KeyError
@@ -184,6 +184,12 @@ def reverse_lookup_jyutping(text):
     if text.isalpha():
         return _toneless_reverse_frequency_index().get(text, [])
     return []
+
+
+def lookup_jyutping(outline):
+    if len(outline) != 1:
+        return ""
+    return jyutping_from_outline(outline)
 
 
 def lookup_honzi(outline, candidate=0):

@@ -72,6 +72,15 @@ class FaaiduckDictionaryTest(unittest.TestCase):
         with self.assertRaises(KeyError):
             faai.lookup(("SDauwjg", "-^"))
 
+    def test_jyutping_fallback_does_not_replace_previous_output(self):
+        with self.assertRaises(KeyError):
+            faai.lookup(("G-SDW", "SDauwjg"))
+        with self.assertRaises(KeyError):
+            faai.lookup(("Gwjg-SDWwj", "SDauwjg"))
+        self.assertEqual(faai.lookup(("G-SDW",)), "{&今日}")
+        self.assertEqual(faai.lookup(("Gwjg-SDWwj",)), "{&今日}")
+        self.assertEqual(faai.lookup(("SDauwjg",)), "{&baap}")
+
     def test_frequency_table_lookup(self):
         self.assertEqual(faai.outline_from_jyutping("sat6ci4"), ("Swj-SHi",))
         self.assertEqual(faai.lookup(("Swj-SHi",)), "{&實詞}")
