@@ -150,6 +150,11 @@ def reverse_lookup(text):
     if strokes:
         return strokes
 
+    if _has_tone(text):
+        strokes = reverse_lookup_jyutping(text)
+        if strokes:
+            return strokes
+
     if "/" in text:
         return []
     if "-" in text:
@@ -167,7 +172,18 @@ def reverse_lookup(text):
         if left_stroke and tone_stroke:
             return [(f"{left_stroke}-{tone_stroke}",)]
     stroke = _reverse_syllable(text)
-    return [(stroke,)] if stroke else []
+    if stroke:
+        return [(stroke,)]
+    return reverse_lookup_jyutping(text)
+
+
+def reverse_lookup_jyutping(text):
+    outline = outline_from_jyutping(text)
+    if outline and all(outline):
+        return [outline]
+    if text.isalpha():
+        return _toneless_reverse_frequency_index().get(text, [])
+    return []
 
 
 def lookup_honzi(outline, candidate=0):
@@ -534,6 +550,32 @@ def _reverse_frequency_index():
         if outline:
             reverse.setdefault(row["honzi"], [outline])
     return {honzi: outlines for honzi, outlines in reverse.items()}
+
+
+@lru_cache(maxsize=1)
+def _toneless_reverse_frequency_index():
+    index = defaultdict(list)
+    for row_number, row in enumerate(_load_frequency_rows()):
+        outline = outline_from_jyutping(row["jyutping"])
+        toneless = _strip_tones(row["jyutping"])
+        if outline and all(outline) and toneless:
+            index[toneless].append((row["frequency"], row_number, outline))
+    return {
+        toneless: _rank_outline_entries(entries)
+        for toneless, entries in index.items()
+    }
+
+
+def _rank_outline_entries(entries):
+    entries.sort(key=lambda entry: (-entry[0], entry[1]))
+    outlines = []
+    seen = set()
+    for _, _, outline in entries:
+        if outline in seen:
+            continue
+        outlines.append(outline)
+        seen.add(outline)
+    return outlines
 
 
 @lru_cache(maxsize=1)

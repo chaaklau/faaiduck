@@ -85,6 +85,16 @@ class FaaiduckDictionaryTest(unittest.TestCase):
         self.assertEqual(faai.reverse_lookup("baa"), [("SDa",)])
         self.assertEqual(faai.reverse_lookup("baa1"), [("SDa-W^",)])
         self.assertEqual(faai.reverse_lookup("巴士"), [("SDa-Si",)])
+        self.assertEqual(faai.reverse_lookup("gam1jat6"), [("Gwjg-SDWwj",)])
+        self.assertEqual(faai.reverse_lookup("gamjat"), [("Gwjg-SDWwj",)])
+
+    def test_initial_pair_can_find_gamjat_by_frequency(self):
+        self.assertEqual(faai.lookup(("G-SDW",)), "{&今日}")
+        self.assertEqual(faai.lookup_candidates(("G-SDW",))[:3], (
+            "今日",
+            "個月",
+            "港人",
+        ))
 
     def test_loader_without_file_global(self):
         path = Path("Faaiduck/dictionaries/default/faai.py").resolve()

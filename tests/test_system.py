@@ -14,7 +14,7 @@ class FaaiduckSystemTest(unittest.TestCase):
     def test_package_is_not_zip_safe(self):
         config = configparser.ConfigParser()
         config.read("setup.cfg")
-        self.assertEqual(config["metadata"]["version"], "0.1.8")
+        self.assertEqual(config["metadata"]["version"], "0.1.9")
         self.assertEqual(config["options"]["zip_safe"], "False")
 
     def test_requested_gemini_key_examples(self):
